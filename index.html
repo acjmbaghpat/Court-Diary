@@ -4,131 +4,25 @@
 <meta charset="UTF-8">
 <title>Court File Management</title>
 
-<!-- ZXing Barcode -->
 <script src="https://unpkg.com/@zxing/library@latest"></script>
-
-<!-- Excel -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style>
-:root{
-  --primary:#1f3c88;
-  --success:#2e7d32;
-  --danger:#c62828;
-  --bg:#f2f4f7;
-}
-body{
-  margin:0;
-  font-family:system-ui,-apple-system;
-  background:var(--bg);
-}
-.header{
-  background:var(--primary);
-  color:#fff;
-  padding:14px;
-  text-align:center;
-  font-size:18px;
-  font-weight:600;
-}
-.section{
-  background:#fff;
-  margin:10px;
-  padding:12px;
-  border-radius:8px;
-  box-shadow:0 1px 4px rgba(0,0,0,.08);
-}
-.section h3{
-  margin:0 0 8px 0;
-  font-size:15px;
-}
-input,button{
-  width:100%;
-  padding:10px;
-  margin-top:6px;
-  font-size:14px;
-  border-radius:6px;
-}
-input{border:1px solid #ccc}
-button{
-  border:none;
-  color:#fff;
-  font-weight:600;
-}
-.btn-primary{background:var(--primary)}
-.btn-success{background:var(--success)}
-.btn-danger{background:var(--danger)}
-.btn-gray{background:#555}
-.actions{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:8px;
-}
-
-/* TABLE */
-.table-wrap{
-  margin:10px;
-  background:#fff;
-  border-radius:8px;
-  overflow:auto;
-}
-table{
-  width:100%;
-  border-collapse:collapse;
-  font-size:12px;
-}
-th{
-  position:sticky;
-  top:0;
-  background:#e9ecf1;
-  padding:6px;
-  border-bottom:2px solid #bbb;
-}
-td{
-  padding:6px;
-  border-bottom:1px solid #ddd;
-}
-tr:nth-child(even){background:#fafafa}
-
-/* SCANNER */
-#scannerWrap{
-  position:fixed;
-  inset:0;
-  background:#000;
-  display:none;
-  z-index:999;
-}
-#video{
-  width:100%;
-  height:80vh;
-  object-fit:cover;
-}
-#scanLine{
-  position:absolute;
-  top:45%;
-  left:10%;
-  width:80%;
-  height:3px;
-  background:red;
-}
-#closeScan{
-  background:var(--danger);
-}
-
-/* NEXT DATE POPUP */
-#nextDatePopup{
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.6);
-  display:none;
-  z-index:1000;
-}
-#popupBox{
-  background:#fff;
-  margin:25% auto;
-  padding:15px;
-  width:90%;
-  border-radius:8px;
-}
+body{margin:0;font-family:Arial;background:#f2f4f7}
+.header{background:#1f3c88;color:#fff;padding:14px;text-align:center;font-weight:bold}
+.section{background:#fff;margin:10px;padding:12px;border-radius:8px}
+input,button{width:100%;padding:10px;margin-top:6px;border-radius:6px}
+button{border:none;background:#1f3c88;color:#fff;font-weight:bold}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.table-wrap{margin:10px;background:#fff;border-radius:8px;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:6px;border-bottom:1px solid #ddd}
+th{background:#e9ecf1;position:sticky;top:0}
+#scannerWrap{position:fixed;inset:0;background:#000;display:none;z-index:999}
+#video{width:100%;height:80vh;object-fit:cover}
+#scanLine{position:absolute;top:45%;left:10%;width:80%;height:3px;background:red}
+#nextDatePopup{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;z-index:1000}
+#popupBox{background:#fff;margin:25% auto;padding:15px;width:90%;border-radius:8px}
 </style>
 </head>
 
@@ -137,32 +31,31 @@ tr:nth-child(even){background:#fafafa}
 <div class="header">Court File Management</div>
 
 <div class="section">
-  <h3>📅 Working Date</h3>
+  <label>Working Date</label>
   <input type="date" id="workDate">
 </div>
 
 <div class="section">
-  <h3>📂 Excel Upload</h3>
+  <label>Upload Excel</label>
   <input type="file" id="excelFile">
-  <button class="btn-primary" onclick="uploadExcel()">Upload Excel</button>
+  <button onclick="uploadExcel()">Upload Excel</button>
 </div>
 
 <div class="section">
-  <h3>🔍 Search</h3>
-  <input type="text" id="searchBox" placeholder="Case / Party / SR No / PS">
+  <label>Search</label>
+  <input type="text" id="searchBox">
 </div>
 
 <div class="section">
-  <h3>📸 Scan Action</h3>
+  <label>Scan</label>
   <div class="actions">
-    <button class="btn-success" onclick="scanSent()">Scan SENT</button>
-    <button class="btn-primary" onclick="scanReceived()">Scan RECEIVED</button>
+    <button onclick="scanSent()">Scan SENT</button>
+    <button onclick="scanReceived()">Scan RECEIVED</button>
   </div>
 </div>
 
 <div class="section">
-  <h3>⬇️ Export</h3>
-  <button class="btn-primary" onclick="downloadExcel()">Download Excel</button>
+  <button onclick="downloadExcel()">Download Excel</button>
 </div>
 
 <div class="table-wrap">
@@ -171,46 +64,57 @@ tr:nth-child(even){background:#fafafa}
 
 <!-- SCANNER -->
 <div id="scannerWrap">
-  <div style="position:relative;">
+  <div style="position:relative">
     <video id="video"></video>
     <div id="scanLine"></div>
   </div>
-  <button id="closeScan" onclick="stopScanner()">Close Scanner</button>
+  <button onclick="stopScanner()">Close</button>
 </div>
 
 <!-- NEXT DATE POPUP -->
 <div id="nextDatePopup">
   <div id="popupBox">
-    <h3>Next Date Select</h3>
+    <h3>Next Date</h3>
     <input type="date" id="nextDateInput">
-    <button class="btn-primary" onclick="saveNextDate()">Save Next Date</button>
+    <button onclick="saveNextDate()">Save</button>
   </div>
 </div>
 
 <script>
-let currentData=[], filteredData=[], scanMode="", codeReader, lastReceivedIndex=null;
+let currentData=[];
+let filteredData=[];
+let scanMode="";
+let codeReader;
+let lastReceivedIndex=null;
 
-workDate.onchange=()=>{
-  let s=localStorage.getItem("court_"+workDate.value);
+/* LOAD DATE DATA */
+document.getElementById("workDate").addEventListener("change",()=>{
+  let val=workDate.value;
+  let s=localStorage.getItem("court_"+val);
   currentData=s?JSON.parse(s):[];
   filteredData=[...currentData];
   drawTable(filteredData);
-};
+});
 
-searchBox.oninput=()=>{
+/* SEARCH */
+searchBox.addEventListener("input",()=>{
   let q=searchBox.value.toLowerCase();
   filteredData=q?currentData.filter(r=>Object.values(r).join(" ").toLowerCase().includes(q)):[...currentData];
   drawTable(filteredData);
-};
+});
 
+/* UPLOAD EXCEL */
 function uploadExcel(){
-  if(!workDate.value)return alert("Select date");
-  let f=excelFile.files[0]; if(!f)return;
-  let r=new FileReader();
-  r.onload=e=>{
+  if(!workDate.value)return alert("Select working date first");
+  let f=excelFile.files[0];
+  if(!f)return alert("Select Excel file");
+
+  let reader=new FileReader();
+  reader.onload=e=>{
     let wb=XLSX.read(e.target.result,{type:"binary"});
     let rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:""});
     rows.shift();
+
     currentData=rows.map(r=>({
       srno:r[0]||"",
       caseno:String(r[1]||"").trim(),
@@ -222,14 +126,18 @@ function uploadExcel(){
       receiveddate:"",
       nextdate:""
     }));
+
     localStorage.setItem("court_"+workDate.value,JSON.stringify(currentData));
     filteredData=[...currentData];
     drawTable(filteredData);
+    alert("Excel Uploaded Successfully");
   };
-  r.readAsBinaryString(f);
+  reader.readAsBinaryString(f);
 }
 
+/* DOWNLOAD */
 function downloadExcel(){
+  if(!currentData.length)return alert("No data");
   let ws=XLSX.utils.json_to_sheet(currentData);
   let wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,"Court Data");
@@ -241,13 +149,16 @@ function scanSent(){scanMode="SENT";startScanner()}
 function scanReceived(){scanMode="RECEIVED";startScanner()}
 
 async function startScanner(){
-  if(!currentData.length)return alert("No data");
+  if(!currentData.length)return alert("No data loaded");
   scannerWrap.style.display="block";
+
   codeReader=new ZXing.BrowserMultiFormatReader(
     new Map([[ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.CODE_128]]])
   );
-  const d=await codeReader.listVideoInputDevices();
-  const cam=d.find(x=>x.label.toLowerCase().includes("back"))||d[0];
+
+  const devices=await codeReader.listVideoInputDevices();
+  const cam=devices.find(d=>d.label.toLowerCase().includes("back"))||devices[0];
+
   codeReader.decodeFromVideoDevice(cam.deviceId,"video",res=>{
     if(res)handleScan(res.text);
   });
@@ -261,22 +172,24 @@ function stopScanner(){
 function handleScan(code){
   stopScanner();
   let idx=currentData.findIndex(r=>r.caseno===code.trim());
-  if(idx===-1)return alert("Mismatch ❌");
+  if(idx===-1)return alert("Mismatch");
+
   let row=currentData[idx];
 
   if(scanMode==="SENT"){
     if(row.sent)return alert("Already Sent");
     row.sent="YES";
-    alert("Sent ✅");
+    alert("Sent");
   }
+
   if(scanMode==="RECEIVED"){
     if(!row.sent)return alert("Not Sent Yet");
     row.received="YES";
     row.receiveddate=new Date().toLocaleDateString();
     lastReceivedIndex=idx;
-    alert("Received ✅");
     nextDatePopup.style.display="block";
   }
+
   localStorage.setItem("court_"+workDate.value,JSON.stringify(currentData));
   filteredData=[...currentData];
   drawTable(filteredData);
