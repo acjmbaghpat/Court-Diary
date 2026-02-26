@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Court File App – Versioned</title>
+<title>Court File App – High Storage</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <script src="https://unpkg.com/@zxing/library@latest"></script>
@@ -62,7 +62,6 @@ th{background:#e9ecf1;position:sticky;top:0}
 <table id="table"></table>
 </div>
 
-<!-- SCANNER -->
 <div id="scannerWrap">
 <div style="position:relative;">
 <video id="video"></video>
@@ -71,7 +70,6 @@ th{background:#e9ecf1;position:sticky;top:0}
 <button onclick="stopScanner()">Close</button>
 </div>
 
-<!-- NEXT DATE -->
 <div id="nextDatePopup">
 <div id="popupBox">
 <h3>Select Next Date</h3>
@@ -81,57 +79,59 @@ th{background:#e9ecf1;position:sticky;top:0}
 </div>
 
 <script>
+let db;
 let currentData=[];
-let filteredData=[];
-let currentKey="";
+let currentUploadId=null;
 let scanMode="";
-let codeReader;
 let lastReceivedIndex=null;
 
+/* INIT DATABASE */
+let request=indexedDB.open("CourtDB",1);
+request.onupgradeneeded=e=>{
+db=e.target.result;
+db.createObjectStore("uploads",{keyPath:"id",autoIncrement:true});
+};
+request.onsuccess=e=>{db=e.target.result;};
+
 /* LOAD VERSIONS */
-function loadVersions(){
-let date=workDate.value;
-versionSelect.innerHTML="";
-if(!date) return;
-
-let keys=Object.keys(localStorage).filter(k=>k.startsWith(date+"_U"));
-keys.sort();
-keys.forEach(k=>{
-let opt=document.createElement("option");
-opt.value=k;
-opt.textContent=k.split("_")[1];
-versionSelect.appendChild(opt);
-});
-if(keys.length){
-currentKey=keys[keys.length-1];
-versionSelect.value=currentKey;
-loadData();
-}
-}
-
 workDate.addEventListener("change",loadVersions);
 
+function loadVersions(){
+let tx=db.transaction("uploads","readonly");
+let store=tx.objectStore("uploads");
+let req=store.getAll();
+req.onsuccess=e=>{
+let data=e.target.result.filter(r=>r.date===workDate.value);
+versionSelect.innerHTML="";
+data.forEach(r=>{
+let opt=document.createElement("option");
+opt.value=r.id;
+opt.textContent="Upload "+r.version;
+versionSelect.appendChild(opt);
+});
+};
+}
+
 versionSelect.addEventListener("change",()=>{
-currentKey=versionSelect.value;
+currentUploadId=parseInt(versionSelect.value);
 loadData();
 });
 
 function loadData(){
-let saved=localStorage.getItem(currentKey);
-currentData=saved?JSON.parse(saved):[];
-filteredData=[...currentData];
-drawTable(filteredData);
+let tx=db.transaction("uploads","readonly");
+let store=tx.objectStore("uploads");
+let req=store.get(currentUploadId);
+req.onsuccess=e=>{
+currentData=e.target.result.data;
+drawTable(currentData);
+};
 }
 
-/* UPLOAD WITH VERSION */
+/* UPLOAD */
 function uploadExcel(){
-if(!workDate.value){alert("Select date first");return;}
+if(!workDate.value){alert("Select date");return;}
 let file=excelFile.files[0];
 if(!file){alert("Select Excel");return;}
-
-let existing=Object.keys(localStorage).filter(k=>k.startsWith(workDate.value+"_U"));
-let version=existing.length+1;
-currentKey=workDate.value+"_U"+version;
 
 let reader=new FileReader();
 reader.onload=e=>{
@@ -139,7 +139,7 @@ let wb=XLSX.read(e.target.result,{type:"binary"});
 let rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:""});
 rows.shift();
 
-currentData=rows.map(r=>({
+let newData=rows.map(r=>({
 srno:r[0]||"",
 caseno:String(r[1]||"").trim(),
 partyname:r[2]||"",
@@ -152,73 +152,85 @@ nextdate:"",
 remark:""
 }));
 
-localStorage.setItem(currentKey,JSON.stringify(currentData));
+let tx=db.transaction("uploads","readwrite");
+let store=tx.objectStore("uploads");
+
+store.getAll().onsuccess=ev=>{
+let sameDate=ev.target.result.filter(r=>r.date===workDate.value);
+let version=sameDate.length+1;
+
+store.add({
+date:workDate.value,
+version:version,
+data:newData
+});
+
+alert("Saved as Upload "+version);
 loadVersions();
-alert("Upload Saved as U"+version);
+};
 };
 reader.readAsBinaryString(file);
 }
 
-/* SEARCH */
-searchBox.addEventListener("input",()=>{
-let q=searchBox.value.toLowerCase();
-filteredData=q?currentData.filter(r=>Object.values(r).join(" ").toLowerCase().includes(q)):[...currentData];
-drawTable(filteredData);
-});
-
-/* QR SCANNER */
+/* QR SCAN */
 function scanSent(){scanMode="SENT";startScanner();}
 function scanReceived(){scanMode="RECEIVED";startScanner();}
 
 async function startScanner(){
 if(!currentData.length){alert("No data");return;}
 scannerWrap.style.display="block";
-codeReader=new ZXing.BrowserQRCodeReader();
-const devices=await codeReader.listVideoInputDevices();
+let reader=new ZXing.BrowserQRCodeReader();
+const devices=await reader.listVideoInputDevices();
 const cam=devices.find(d=>d.label.toLowerCase().includes("back"))||devices[0];
-codeReader.decodeFromVideoDevice(cam.deviceId,"video",(result)=>{
-if(result) handleScan(result.text);
+reader.decodeFromVideoDevice(cam.deviceId,"video",(result)=>{
+if(result){
+handleScan(result.text);
+reader.reset();
+scannerWrap.style.display="none";
+}
 });
 }
 
-function stopScanner(){
-if(codeReader)codeReader.reset();
-scannerWrap.style.display="none";
-}
+function stopScanner(){scannerWrap.style.display="none";}
 
+/* HANDLE SCAN */
 function handleScan(code){
-stopScanner();
 let idx=currentData.findIndex(r=>r.caseno===code.trim());
 if(idx===-1){alert("Mismatch");return;}
 let row=currentData[idx];
 
-if(scanMode==="SENT"){
-if(row.sent){alert("Already Sent");return;}
-row.sent="YES";
-}
+if(scanMode==="SENT") row.sent="YES";
 
 if(scanMode==="RECEIVED"){
-if(!row.sent){alert("Not Sent Yet");return;}
 row.received="YES";
 row.receiveddate=new Date().toLocaleDateString();
 lastReceivedIndex=idx;
 nextDatePopup.style.display="block";
 }
 
-localStorage.setItem(currentKey,JSON.stringify(currentData));
+saveToDB();
 drawTable(currentData);
 }
 
-/* NEXT DATE */
 function saveNextDate(){
-if(!nextDateInput.value){alert("Select date");return;}
 currentData[lastReceivedIndex].nextdate=nextDateInput.value;
-localStorage.setItem(currentKey,JSON.stringify(currentData));
 nextDatePopup.style.display="none";
+saveToDB();
 drawTable(currentData);
 }
 
-/* TABLE WITH REMARK INPUT */
+/* SAVE CHANGES */
+function saveToDB(){
+let tx=db.transaction("uploads","readwrite");
+let store=tx.objectStore("uploads");
+store.get(currentUploadId).onsuccess=e=>{
+let record=e.target.result;
+record.data=currentData;
+store.put(record);
+};
+}
+
+/* TABLE */
 function drawTable(data){
 table.innerHTML="";
 if(!data.length)return;
@@ -238,9 +250,9 @@ table.innerHTML+=row;
 });
 }
 
-function updateRemark(index,val){
-currentData[index].remark=val;
-localStorage.setItem(currentKey,JSON.stringify(currentData));
+function updateRemark(i,val){
+currentData[i].remark=val;
+saveToDB();
 }
 
 /* DOWNLOAD */
@@ -249,7 +261,7 @@ if(!currentData.length){alert("No data");return;}
 let ws=XLSX.utils.json_to_sheet(currentData);
 let wb=XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(wb,ws,"Court Data");
-XLSX.writeFile(wb,currentKey+".xlsx");
+XLSX.writeFile(wb,"Court_"+workDate.value+".xlsx");
 }
 </script>
 </body>
