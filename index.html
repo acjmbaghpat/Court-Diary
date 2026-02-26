@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Court File App – High Storage</title>
+<title>Court File App – High Storage Stable</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <script src="https://unpkg.com/@zxing/library@latest"></script>
@@ -79,7 +79,8 @@ th{background:#e9ecf1;position:sticky;top:0}
 </div>
 
 <script>
-let db;
+let db=null;
+let dbReady=false;
 let currentData=[];
 let currentUploadId=null;
 let scanMode="";
@@ -87,16 +88,39 @@ let lastReceivedIndex=null;
 
 /* INIT DATABASE */
 let request=indexedDB.open("CourtDB",1);
+
 request.onupgradeneeded=e=>{
-db=e.target.result;
-db.createObjectStore("uploads",{keyPath:"id",autoIncrement:true});
+let dbTemp=e.target.result;
+if(!dbTemp.objectStoreNames.contains("uploads")){
+dbTemp.createObjectStore("uploads",{keyPath:"id",autoIncrement:true});
+}
 };
-request.onsuccess=e=>{db=e.target.result;};
+
+request.onsuccess=e=>{
+db=e.target.result;
+dbReady=true;
+console.log("Database Ready");
+};
+
+request.onerror=()=>{
+alert("Database error");
+};
+
+/* SAFETY CHECK */
+function checkDB(){
+if(!dbReady){
+alert("Database loading... please wait 2 seconds and try again.");
+return false;
+}
+return true;
+}
 
 /* LOAD VERSIONS */
 workDate.addEventListener("change",loadVersions);
 
 function loadVersions(){
+if(!checkDB()) return;
+
 let tx=db.transaction("uploads","readonly");
 let store=tx.objectStore("uploads");
 let req=store.getAll();
@@ -118,10 +142,11 @@ loadData();
 });
 
 function loadData(){
+if(!checkDB()) return;
+
 let tx=db.transaction("uploads","readonly");
 let store=tx.objectStore("uploads");
-let req=store.get(currentUploadId);
-req.onsuccess=e=>{
+store.get(currentUploadId).onsuccess=e=>{
 currentData=e.target.result.data;
 drawTable(currentData);
 };
@@ -129,6 +154,7 @@ drawTable(currentData);
 
 /* UPLOAD */
 function uploadExcel(){
+if(!checkDB()) return;
 if(!workDate.value){alert("Select date");return;}
 let file=excelFile.files[0];
 if(!file){alert("Select Excel");return;}
@@ -172,6 +198,18 @@ loadVersions();
 reader.readAsBinaryString(file);
 }
 
+/* SAVE TO DB */
+function saveToDB(){
+if(!checkDB()) return;
+let tx=db.transaction("uploads","readwrite");
+let store=tx.objectStore("uploads");
+store.get(currentUploadId).onsuccess=e=>{
+let record=e.target.result;
+record.data=currentData;
+store.put(record);
+};
+}
+
 /* QR SCAN */
 function scanSent(){scanMode="SENT";startScanner();}
 function scanReceived(){scanMode="RECEIVED";startScanner();}
@@ -193,7 +231,6 @@ scannerWrap.style.display="none";
 
 function stopScanner(){scannerWrap.style.display="none";}
 
-/* HANDLE SCAN */
 function handleScan(code){
 let idx=currentData.findIndex(r=>r.caseno===code.trim());
 if(idx===-1){alert("Mismatch");return;}
@@ -217,17 +254,6 @@ currentData[lastReceivedIndex].nextdate=nextDateInput.value;
 nextDatePopup.style.display="none";
 saveToDB();
 drawTable(currentData);
-}
-
-/* SAVE CHANGES */
-function saveToDB(){
-let tx=db.transaction("uploads","readwrite");
-let store=tx.objectStore("uploads");
-store.get(currentUploadId).onsuccess=e=>{
-let record=e.target.result;
-record.data=currentData;
-store.put(record);
-};
 }
 
 /* TABLE */
