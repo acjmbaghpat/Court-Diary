@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Court File App – Versioned High Storage</title>
+<title>Court File App – Stable Final</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <script src="https://unpkg.com/@zxing/library@latest"></script>
@@ -84,6 +84,7 @@ let currentData=[];
 let currentUploadId=null;
 let scanMode="";
 let lastReceivedIndex=null;
+let currentSearch="";
 
 /* INIT DB */
 let request=indexedDB.open("CourtDB",1);
@@ -115,18 +116,18 @@ let latest=data[data.length-1];
 currentUploadId=latest.id;
 versionSelect.value=latest.id;
 currentData=latest.data;
-drawTable(currentData);
+applySearch();
 }
 };
 }
 
-/* VERSION SELECT */
+/* VERSION CHANGE */
 versionSelect.addEventListener("change",()=>{
 currentUploadId=parseInt(versionSelect.value);
 let tx=db.transaction("uploads","readonly");
 tx.objectStore("uploads").get(currentUploadId).onsuccess=e=>{
 currentData=e.target.result.data;
-drawTable(currentData);
+applySearch();
 };
 });
 
@@ -169,7 +170,6 @@ data:newData
 }).onsuccess=ev2=>{
 currentUploadId=ev2.target.result;
 currentData=newData;
-drawTable(currentData);
 loadVersions();
 alert("Saved as Upload "+version);
 };
@@ -189,12 +189,18 @@ store.put(record);
 };
 }
 
-/* SEARCH */
+/* SEARCH FIX */
 searchBox.addEventListener("input",()=>{
-let q=searchBox.value.toLowerCase();
-let filtered=q?currentData.filter(r=>Object.values(r).join(" ").toLowerCase().includes(q)):currentData;
-drawTable(filtered);
+currentSearch=searchBox.value.toLowerCase();
+applySearch();
 });
+
+function applySearch(){
+let filtered=currentSearch
+? currentData.filter(r=>Object.values(r).join(" ").toLowerCase().includes(currentSearch))
+: currentData;
+drawTable(filtered);
+}
 
 /* QR */
 function scanSent(){scanMode="SENT";startScanner();}
@@ -231,14 +237,14 @@ nextDatePopup.style.display="block";
 }
 
 saveToDB();
-drawTable(currentData);
+applySearch();
 }
 
 function saveNextDate(){
 currentData[lastReceivedIndex].nextdate=nextDateInput.value;
 nextDatePopup.style.display="none";
 saveToDB();
-drawTable(currentData);
+applySearch();
 }
 
 function updateRemark(i,val){
