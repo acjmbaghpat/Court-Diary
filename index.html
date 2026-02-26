@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Court File App – QR Version</title>
+<title>Court File App – QR Mobile</title>
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -10,13 +10,82 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style>
-body{font-family:Arial;background:#f4f4f4;margin:0;padding:10px}
-.section{background:#fff;padding:10px;margin-bottom:12px;border-radius:6px}
-h3{margin:0 0 6px 0}
-input,button{width:100%;padding:12px;margin:6px 0;font-size:15px}
-button{background:#1976d2;color:#fff;border:none;border-radius:4px}
-table{width:100%;border-collapse:collapse;margin-top:10px}
-th,td{border:1px solid #333;padding:5px;font-size:12px}
+body{
+  font-family:system-ui,-apple-system;
+  background:#f2f4f7;
+  margin:0;
+  padding:8px;
+}
+
+.header{
+  text-align:center;
+  font-weight:600;
+  padding:12px;
+  font-size:18px;
+}
+
+.section{
+  background:#fff;
+  padding:14px;
+  margin-bottom:12px;
+  border-radius:12px;
+  box-shadow:0 2px 6px rgba(0,0,0,.08);
+}
+
+h3{
+  margin:0 0 8px 0;
+  font-size:15px;
+}
+
+input,button{
+  width:100%;
+  padding:14px;
+  margin-top:8px;
+  font-size:16px;
+  border-radius:10px;
+}
+
+input{
+  border:1px solid #ccc;
+}
+
+button{
+  border:none;
+  background:#1976d2;
+  color:#fff;
+  font-weight:600;
+}
+
+.scan-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+
+.table-wrap{
+  background:#fff;
+  border-radius:12px;
+  overflow-x:auto;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  min-width:700px;
+  font-size:13px;
+}
+
+th,td{
+  border:1px solid #ddd;
+  padding:6px;
+  text-align:left;
+}
+
+th{
+  background:#e9ecf1;
+  position:sticky;
+  top:0;
+}
 
 /* SCANNER */
 #scannerWrap{
@@ -24,70 +93,79 @@ th,td{border:1px solid #333;padding:5px;font-size:12px}
   inset:0;
   background:#000;
   display:none;
-  z-index:999
+  z-index:999;
 }
+
 #video{
-  width:100vw;
-  height:80vh;
-  object-fit:cover
+  width:100%;
+  height:75vh;
+  object-fit:cover;
 }
+
 #scanBox{
   position:absolute;
-  top:30%;
-  left:20%;
-  width:60%;
-  height:40%;
+  top:25%;
+  left:15%;
+  width:70%;
+  height:50%;
   border:4px solid #00ff00;
-  box-sizing:border-box;
+  border-radius:10px;
 }
 
 /* NEXT DATE POPUP */
 #nextDatePopup{
   position:fixed;
   inset:0;
-  background:rgba(0,0,0,0.6);
+  background:rgba(0,0,0,.6);
   display:none;
-  z-index:1000
+  z-index:1000;
 }
+
 #popupBox{
   background:#fff;
-  margin:20% auto;
-  padding:15px;
+  margin:25% auto;
+  padding:20px;
   width:90%;
-  border-radius:6px
+  border-radius:12px;
 }
 </style>
 </head>
 
 <body>
 
+<div class="header">Court File Management</div>
+
 <div class="section">
-  <h3>Working Date</h3>
+  <h3>📅 Working Date</h3>
   <input type="date" id="workDate">
 </div>
 
 <div class="section">
-  <h3>Excel Upload</h3>
+  <h3>📂 Excel Upload</h3>
   <input type="file" id="excelFile">
   <button onclick="uploadExcel()">Upload Excel</button>
 </div>
 
 <div class="section">
-  <h3>Search</h3>
-  <input type="text" id="searchBox">
+  <h3>🔍 Search</h3>
+  <input type="text" id="searchBox" placeholder="Case / Party / SR No / PS">
 </div>
 
 <div class="section">
-  <h3>Scan Action</h3>
-  <button onclick="scanSent()">Scan SENT (QR)</button>
-  <button onclick="scanReceived()">Scan RECEIVED (QR)</button>
+  <h3>📸 Scan Action</h3>
+  <div class="scan-actions">
+    <button onclick="scanSent()">Scan SENT</button>
+    <button onclick="scanReceived()">Scan RECEIVED</button>
+  </div>
 </div>
 
 <div class="section">
-  <button onclick="downloadExcel()">Download Excel</button>
+  <button onclick="downloadExcel()">⬇ Download Excel</button>
 </div>
 
-<table id="table"></table>
+<div class="table-wrap">
+  <table id="table"></table>
+</div>
 
 <!-- SCANNER -->
 <div id="scannerWrap">
@@ -101,7 +179,7 @@ th,td{border:1px solid #333;padding:5px;font-size:12px}
 <!-- NEXT DATE POPUP -->
 <div id="nextDatePopup">
   <div id="popupBox">
-    <h3>Next Date</h3>
+    <h3>Select Next Date</h3>
     <input type="date" id="nextDateInput">
     <button onclick="saveNextDate()">Save</button>
   </div>
@@ -175,24 +253,18 @@ function scanReceived(){scanMode="RECEIVED";startScanner();}
 
 async function startScanner(){
   if(!currentData.length){alert("No data");return;}
-
   scannerWrap.style.display="block";
 
   codeReader=new ZXing.BrowserQRCodeReader();
 
-  try{
-    const devices=await codeReader.listVideoInputDevices();
-    const cam=devices.find(d=>d.label.toLowerCase().includes("back"))||devices[0];
+  const devices=await codeReader.listVideoInputDevices();
+  const cam=devices.find(d=>d.label.toLowerCase().includes("back"))||devices[0];
 
-    codeReader.decodeFromVideoDevice(cam.deviceId,"video",(result,err)=>{
-      if(result){
-        handleScan(result.text);
-      }
-    });
-
-  }catch(e){
-    alert("Camera error");
-  }
+  codeReader.decodeFromVideoDevice(cam.deviceId,"video",(result)=>{
+    if(result){
+      handleScan(result.text);
+    }
+  });
 }
 
 function stopScanner(){
