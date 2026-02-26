@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Court File App – Stable Scanner</title>
+<title>Court File App – QR Version</title>
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -31,15 +31,15 @@ th,td{border:1px solid #333;padding:5px;font-size:12px}
   height:80vh;
   object-fit:cover
 }
-#scanLine{
+#scanBox{
   position:absolute;
-  top:45%;
-  left:10%;
-  width:80%;
-  height:3px;
-  background:red
+  top:30%;
+  left:20%;
+  width:60%;
+  height:40%;
+  border:4px solid #00ff00;
+  box-sizing:border-box;
 }
-#closeScan{background:#c62828}
 
 /* NEXT DATE POPUP */
 #nextDatePopup{
@@ -74,13 +74,13 @@ th,td{border:1px solid #333;padding:5px;font-size:12px}
 
 <div class="section">
   <h3>Search</h3>
-  <input type="text" id="searchBox" placeholder="Search case / party / sr no / ps">
+  <input type="text" id="searchBox">
 </div>
 
 <div class="section">
   <h3>Scan Action</h3>
-  <button onclick="scanSent()">Scan for SENT</button>
-  <button onclick="scanReceived()">Scan for RECEIVED</button>
+  <button onclick="scanSent()">Scan SENT (QR)</button>
+  <button onclick="scanReceived()">Scan RECEIVED (QR)</button>
 </div>
 
 <div class="section">
@@ -93,17 +93,17 @@ th,td{border:1px solid #333;padding:5px;font-size:12px}
 <div id="scannerWrap">
   <div style="position:relative;">
     <video id="video"></video>
-    <div id="scanLine"></div>
+    <div id="scanBox"></div>
   </div>
-  <button id="closeScan" onclick="stopScanner()">Close Scanner</button>
+  <button onclick="stopScanner()">Close Scanner</button>
 </div>
 
 <!-- NEXT DATE POPUP -->
 <div id="nextDatePopup">
   <div id="popupBox">
-    <h3>Next Date Select</h3>
+    <h3>Next Date</h3>
     <input type="date" id="nextDateInput">
-    <button onclick="saveNextDate()">Save Next Date</button>
+    <button onclick="saveNextDate()">Save</button>
   </div>
 </div>
 
@@ -114,7 +114,6 @@ let scanMode="";
 let codeReader;
 let lastReceivedIndex=null;
 
-/* LOAD DATE DATA */
 workDate.addEventListener("change",()=>{
   let saved=localStorage.getItem("court_"+workDate.value);
   currentData=saved?JSON.parse(saved):[];
@@ -122,20 +121,16 @@ workDate.addEventListener("change",()=>{
   drawTable(filteredData);
 });
 
-/* SEARCH */
 searchBox.addEventListener("input",()=>{
   let q=searchBox.value.toLowerCase();
-  filteredData=q
-    ? currentData.filter(r=>Object.values(r).join(" ").toLowerCase().includes(q))
-    : [...currentData];
+  filteredData=q?currentData.filter(r=>Object.values(r).join(" ").toLowerCase().includes(q)):[...currentData];
   drawTable(filteredData);
 });
 
-/* EXCEL UPLOAD */
 function uploadExcel(){
-  if(!workDate.value){alert("Pehle date select karo");return;}
+  if(!workDate.value){alert("Select date first");return;}
   let file=excelFile.files[0];
-  if(!file){alert("No Excel selected");return;}
+  if(!file){alert("Select Excel file");return;}
 
   let reader=new FileReader();
   reader.onload=e=>{
@@ -160,66 +155,40 @@ function uploadExcel(){
 
     localStorage.setItem("court_"+workDate.value,JSON.stringify(currentData));
     filteredData=[...currentData];
-    alert("Excel uploaded & saved");
+    alert("Excel Uploaded");
     drawTable(filteredData);
   };
   reader.readAsBinaryString(file);
 }
 
-/* DOWNLOAD */
 function downloadExcel(){
   if(!currentData.length){alert("No data");return;}
   let ws=XLSX.utils.json_to_sheet(currentData);
   let wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,"Court Data");
-  XLSX.writeFile(wb,"Court_Data_"+workDate.value+".xlsx");
+  XLSX.writeFile(wb,"Court_"+workDate.value+".xlsx");
 }
 
-/* SCAN BUTTONS */
+/* QR SCANNER */
 function scanSent(){scanMode="SENT";startScanner();}
 function scanReceived(){scanMode="RECEIVED";startScanner();}
 
-/* 🔥 IMPROVED SCANNER */
 async function startScanner(){
-
-  if(!currentData.length){
-    alert("No data");
-    return;
-  }
+  if(!currentData.length){alert("No data");return;}
 
   scannerWrap.style.display="block";
 
-  const hints=new Map();
-  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.CODE_128]);
-  hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
-
-  codeReader=new ZXing.BrowserMultiFormatReader(hints,{
-    delayBetweenScanAttempts:40,
-    delayBetweenScanSuccess:500
-  });
+  codeReader=new ZXing.BrowserQRCodeReader();
 
   try{
     const devices=await codeReader.listVideoInputDevices();
     const cam=devices.find(d=>d.label.toLowerCase().includes("back"))||devices[0];
 
-    const constraints={
-      video:{
-        deviceId:cam.deviceId,
-        facingMode:"environment",
-        width:{ideal:1920},
-        height:{ideal:1080}
+    codeReader.decodeFromVideoDevice(cam.deviceId,"video",(result,err)=>{
+      if(result){
+        handleScan(result.text);
       }
-    };
-
-    codeReader.decodeFromConstraints(
-      constraints,
-      "video",
-      (result,err)=>{
-        if(result){
-          handleScan(result.text);
-        }
-      }
-    );
+    });
 
   }catch(e){
     alert("Camera error");
@@ -227,14 +196,10 @@ async function startScanner(){
 }
 
 function stopScanner(){
-  if(codeReader){
-    codeReader.reset();
-    codeReader=null;
-  }
+  if(codeReader){codeReader.reset();}
   scannerWrap.style.display="none";
 }
 
-/* HANDLE SCAN */
 function handleScan(code){
   stopScanner();
   code=code.trim();
@@ -245,18 +210,18 @@ function handleScan(code){
   let row=currentData[idx];
 
   if(scanMode==="SENT"){
-    if(row.sent){alert("Already Sent ❌");return;}
+    if(row.sent){alert("Already Sent");return;}
     row.sent="YES";
     alert("Sent ✅");
   }
 
   if(scanMode==="RECEIVED"){
-    if(!row.sent){alert("Not Sent Yet ❌");return;}
+    if(!row.sent){alert("Not Sent Yet");return;}
     row.received="YES";
     row.receiveddate=new Date().toLocaleDateString();
     lastReceivedIndex=idx;
     alert("Received ✅");
-    openNextDatePopup();
+    nextDatePopup.style.display="block";
   }
 
   localStorage.setItem("court_"+workDate.value,JSON.stringify(currentData));
@@ -264,23 +229,14 @@ function handleScan(code){
   drawTable(filteredData);
 }
 
-/* NEXT DATE */
-function openNextDatePopup(){
-  nextDateInput.value="";
-  nextDatePopup.style.display="block";
-}
-
 function saveNextDate(){
-  let nd=nextDateInput.value;
-  if(!nd){alert("Next Date select karo");return;}
-  currentData[lastReceivedIndex].nextdate=nd;
+  if(!nextDateInput.value){alert("Select next date");return;}
+  currentData[lastReceivedIndex].nextdate=nextDateInput.value;
   localStorage.setItem("court_"+workDate.value,JSON.stringify(currentData));
   nextDatePopup.style.display="none";
-  alert("Next Date Saved ✅");
   drawTable(filteredData);
 }
 
-/* TABLE */
 function drawTable(data){
   table.innerHTML="";
   if(!data.length)return;
