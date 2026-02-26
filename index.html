@@ -189,7 +189,7 @@ store.put(record);
 };
 }
 
-/* SEARCH FIX */
+/* SEARCH */
 searchBox.addEventListener("input",()=>{
 currentSearch=searchBox.value.toLowerCase();
 applySearch();
@@ -225,14 +225,28 @@ function stopScanner(){scannerWrap.style.display="none";}
 
 function handleScan(code){
 let idx=currentData.findIndex(r=>r.caseno===code.trim());
-if(idx===-1){alert("Mismatch");return;}
+if(idx===-1){alert("Mismatch ❌");return;}
 
-if(scanMode==="SENT") currentData[idx].sent="YES";
+/* SENT POPUP ADDED */
+if(scanMode==="SENT"){
+if(currentData[idx].sent==="YES"){
+alert("Already Sent ❌");
+return;
+}
+currentData[idx].sent="YES";
+alert("Sent ✅");
+}
 
+/* RECEIVED */
 if(scanMode==="RECEIVED"){
+if(currentData[idx].received==="YES"){
+alert("Already Received ❌");
+return;
+}
 currentData[idx].received="YES";
 currentData[idx].receiveddate=new Date().toLocaleDateString();
 lastReceivedIndex=idx;
+alert("Received ✅");
 nextDatePopup.style.display="block";
 }
 
