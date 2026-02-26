@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Court File App – High Storage Stable</title>
+<title>Court File App – Versioned High Storage</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <script src="https://unpkg.com/@zxing/library@latest"></script>
@@ -17,7 +17,7 @@ input,select{border:1px solid #ccc}
 button{border:none;background:#1976d2;color:#fff;font-weight:600}
 .scan-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .table-wrap{background:#fff;border-radius:12px;overflow-x:auto}
-table{width:100%;border-collapse:collapse;min-width:800px;font-size:13px}
+table{width:100%;border-collapse:collapse;min-width:900px;font-size:13px}
 th,td{border:1px solid #ddd;padding:6px;text-align:left}
 th{background:#e9ecf1;position:sticky;top:0}
 #scannerWrap{position:fixed;inset:0;background:#000;display:none;z-index:999}
@@ -79,52 +79,29 @@ th{background:#e9ecf1;position:sticky;top:0}
 </div>
 
 <script>
-let db=null;
-let dbReady=false;
+let db;
 let currentData=[];
 let currentUploadId=null;
 let scanMode="";
 let lastReceivedIndex=null;
 
-/* INIT DATABASE */
+/* INIT DB */
 let request=indexedDB.open("CourtDB",1);
-
 request.onupgradeneeded=e=>{
 let dbTemp=e.target.result;
 if(!dbTemp.objectStoreNames.contains("uploads")){
 dbTemp.createObjectStore("uploads",{keyPath:"id",autoIncrement:true});
 }
 };
-
-request.onsuccess=e=>{
-db=e.target.result;
-dbReady=true;
-console.log("Database Ready");
-};
-
-request.onerror=()=>{
-alert("Database error");
-};
-
-/* SAFETY CHECK */
-function checkDB(){
-if(!dbReady){
-alert("Database loading... please wait 2 seconds and try again.");
-return false;
-}
-return true;
-}
+request.onsuccess=e=>{db=e.target.result;};
 
 /* LOAD VERSIONS */
 workDate.addEventListener("change",loadVersions);
 
 function loadVersions(){
-if(!checkDB()) return;
-
 let tx=db.transaction("uploads","readonly");
 let store=tx.objectStore("uploads");
-let req=store.getAll();
-req.onsuccess=e=>{
+store.getAll().onsuccess=e=>{
 let data=e.target.result.filter(r=>r.date===workDate.value);
 versionSelect.innerHTML="";
 data.forEach(r=>{
@@ -133,28 +110,28 @@ opt.value=r.id;
 opt.textContent="Upload "+r.version;
 versionSelect.appendChild(opt);
 });
+if(data.length){
+let latest=data[data.length-1];
+currentUploadId=latest.id;
+versionSelect.value=latest.id;
+currentData=latest.data;
+drawTable(currentData);
+}
 };
 }
 
+/* VERSION SELECT */
 versionSelect.addEventListener("change",()=>{
 currentUploadId=parseInt(versionSelect.value);
-loadData();
-});
-
-function loadData(){
-if(!checkDB()) return;
-
 let tx=db.transaction("uploads","readonly");
-let store=tx.objectStore("uploads");
-store.get(currentUploadId).onsuccess=e=>{
+tx.objectStore("uploads").get(currentUploadId).onsuccess=e=>{
 currentData=e.target.result.data;
 drawTable(currentData);
 };
-}
+});
 
 /* UPLOAD */
 function uploadExcel(){
-if(!checkDB()) return;
 if(!workDate.value){alert("Select date");return;}
 let file=excelFile.files[0];
 if(!file){alert("Select Excel");return;}
@@ -189,18 +166,20 @@ store.add({
 date:workDate.value,
 version:version,
 data:newData
-});
-
-alert("Saved as Upload "+version);
+}).onsuccess=ev2=>{
+currentUploadId=ev2.target.result;
+currentData=newData;
+drawTable(currentData);
 loadVersions();
+alert("Saved as Upload "+version);
+};
 };
 };
 reader.readAsBinaryString(file);
 }
 
-/* SAVE TO DB */
+/* SAVE */
 function saveToDB(){
-if(!checkDB()) return;
 let tx=db.transaction("uploads","readwrite");
 let store=tx.objectStore("uploads");
 store.get(currentUploadId).onsuccess=e=>{
@@ -210,7 +189,14 @@ store.put(record);
 };
 }
 
-/* QR SCAN */
+/* SEARCH */
+searchBox.addEventListener("input",()=>{
+let q=searchBox.value.toLowerCase();
+let filtered=q?currentData.filter(r=>Object.values(r).join(" ").toLowerCase().includes(q)):currentData;
+drawTable(filtered);
+});
+
+/* QR */
 function scanSent(){scanMode="SENT";startScanner();}
 function scanReceived(){scanMode="RECEIVED";startScanner();}
 
@@ -234,13 +220,12 @@ function stopScanner(){scannerWrap.style.display="none";}
 function handleScan(code){
 let idx=currentData.findIndex(r=>r.caseno===code.trim());
 if(idx===-1){alert("Mismatch");return;}
-let row=currentData[idx];
 
-if(scanMode==="SENT") row.sent="YES";
+if(scanMode==="SENT") currentData[idx].sent="YES";
 
 if(scanMode==="RECEIVED"){
-row.received="YES";
-row.receiveddate=new Date().toLocaleDateString();
+currentData[idx].received="YES";
+currentData[idx].receiveddate=new Date().toLocaleDateString();
 lastReceivedIndex=idx;
 nextDatePopup.style.display="block";
 }
@@ -254,6 +239,11 @@ currentData[lastReceivedIndex].nextdate=nextDateInput.value;
 nextDatePopup.style.display="none";
 saveToDB();
 drawTable(currentData);
+}
+
+function updateRemark(i,val){
+currentData[i].remark=val;
+saveToDB();
 }
 
 /* TABLE */
@@ -274,11 +264,6 @@ row+=`<td>${r[k]}</td>`;
 row+="</tr>";
 table.innerHTML+=row;
 });
-}
-
-function updateRemark(i,val){
-currentData[i].remark=val;
-saveToDB();
 }
 
 /* DOWNLOAD */
