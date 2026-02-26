@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Court File App – Final Stable</title>
+<title>Court File App – Final Pro</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <script src="https://unpkg.com/@zxing/library@latest"></script>
@@ -86,6 +86,14 @@ let scanMode="";
 let lastReceivedIndex=null;
 let currentSearch="";
 let scannerInstance=null;
+
+/* VIBRATION */
+function vibrate(type){
+if(!navigator.vibrate) return;
+if(type==="success") navigator.vibrate(200);
+if(type==="received") navigator.vibrate(300);
+if(type==="error") navigator.vibrate([100,100,100]);
+}
 
 /* INIT DATABASE */
 let request=indexedDB.open("CourtDB",1);
@@ -233,6 +241,7 @@ let idx=currentData.findIndex(r=>r.caseno===code);
 
 if(idx===-1){
 alert("File Not Found ❌");
+vibrate("error");
 return;
 }
 
@@ -240,6 +249,7 @@ if(scanMode==="SENT"){
 
 if(currentData[idx].sent==="YES"){
 alert("Already Sent ❌");
+vibrate("error");
 return;
 }
 
@@ -247,6 +257,7 @@ currentData[idx].sent="YES";
 saveToDB();
 applySearch();
 alert("Sent ✅");
+vibrate("success");
 return;
 }
 
@@ -254,11 +265,13 @@ if(scanMode==="RECEIVED"){
 
 if(currentData[idx].sent!=="YES"){
 alert("File Not Sent Yet ❌");
+vibrate("error");
 return;
 }
 
 if(currentData[idx].received==="YES"){
 alert("Already Received ❌");
+vibrate("error");
 return;
 }
 
@@ -269,6 +282,7 @@ lastReceivedIndex=idx;
 saveToDB();
 applySearch();
 alert("Received ✅");
+vibrate("received");
 nextDatePopup.style.display="block";
 }
 }
