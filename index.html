@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Court File App – Stable Final</title>
+<title>Court File App – Final Stable</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <script src="https://unpkg.com/@zxing/library@latest"></script>
@@ -19,7 +19,7 @@ button{border:none;background:#1976d2;color:#fff;font-weight:600}
 .table-wrap{background:#fff;border-radius:12px;overflow-x:auto}
 table{width:100%;border-collapse:collapse;min-width:900px;font-size:13px}
 th,td{border:1px solid #ddd;padding:6px;text-align:left}
-th{background:#e9ecf1;position:sticky;top:0}
+th{background:#e9ecf1}
 #scannerWrap{position:fixed;inset:0;background:#000;display:none;z-index:999}
 #video{width:100%;height:75vh;object-fit:cover}
 #scanBox{position:absolute;top:25%;left:15%;width:70%;height:50%;border:4px solid #00ff00;border-radius:10px}
@@ -30,24 +30,24 @@ th{background:#e9ecf1;position:sticky;top:0}
 <body>
 
 <div class="section">
-<h3>📅 Working Date</h3>
+<h3>Working Date</h3>
 <input type="date" id="workDate">
 <select id="versionSelect"></select>
 </div>
 
 <div class="section">
-<h3>📂 Excel Upload</h3>
+<h3>Excel Upload</h3>
 <input type="file" id="excelFile">
 <button onclick="uploadExcel()">Upload Excel</button>
 </div>
 
 <div class="section">
-<h3>🔍 Search</h3>
+<h3>Search</h3>
 <input type="text" id="searchBox">
 </div>
 
 <div class="section">
-<h3>📸 Scan</h3>
+<h3>Scan</h3>
 <div class="scan-actions">
 <button onclick="scanSent()">Scan SENT</button>
 <button onclick="scanReceived()">Scan RECEIVED</button>
@@ -55,7 +55,7 @@ th{background:#e9ecf1;position:sticky;top:0}
 </div>
 
 <div class="section">
-<button onclick="downloadExcel()">⬇ Download Excel</button>
+<button onclick="downloadExcel()">Download Excel</button>
 </div>
 
 <div class="table-wrap">
@@ -85,13 +85,14 @@ let currentUploadId=null;
 let scanMode="";
 let lastReceivedIndex=null;
 let currentSearch="";
+let scannerInstance=null;
 
-/* INIT DB */
+/* INIT DATABASE */
 let request=indexedDB.open("CourtDB",1);
 request.onupgradeneeded=e=>{
-let dbTemp=e.target.result;
-if(!dbTemp.objectStoreNames.contains("uploads")){
-dbTemp.createObjectStore("uploads",{keyPath:"id",autoIncrement:true});
+let d=e.target.result;
+if(!d.objectStoreNames.contains("uploads")){
+d.createObjectStore("uploads",{keyPath:"id",autoIncrement:true});
 }
 };
 request.onsuccess=e=>{db=e.target.result;};
@@ -121,7 +122,6 @@ applySearch();
 };
 }
 
-/* VERSION CHANGE */
 versionSelect.addEventListener("change",()=>{
 currentUploadId=parseInt(versionSelect.value);
 let tx=db.transaction("uploads","readonly");
@@ -202,56 +202,75 @@ let filtered=currentSearch
 drawTable(filtered);
 }
 
-/* QR */
+/* SCANNER */
 function scanSent(){scanMode="SENT";startScanner();}
 function scanReceived(){scanMode="RECEIVED";startScanner();}
 
 async function startScanner(){
 if(!currentData.length){alert("No data");return;}
 scannerWrap.style.display="block";
-let reader=new ZXing.BrowserQRCodeReader();
-const devices=await reader.listVideoInputDevices();
+scannerInstance=new ZXing.BrowserQRCodeReader();
+const devices=await scannerInstance.listVideoInputDevices();
 const cam=devices.find(d=>d.label.toLowerCase().includes("back"))||devices[0];
-reader.decodeFromVideoDevice(cam.deviceId,"video",(result)=>{
+scannerInstance.decodeFromVideoDevice(cam.deviceId,"video",(result)=>{
 if(result){
-handleScan(result.text);
-reader.reset();
-scannerWrap.style.display="none";
+let code=result.text.trim();
+scannerInstance.reset();
+stopScanner();
+handleScan(code);
 }
 });
 }
 
-function stopScanner(){scannerWrap.style.display="none";}
+function stopScanner(){
+scannerWrap.style.display="none";
+}
 
+/* HANDLE SCAN */
 function handleScan(code){
-let idx=currentData.findIndex(r=>r.caseno===code.trim());
-if(idx===-1){alert("Mismatch ❌");return;}
 
-/* SENT POPUP ADDED */
+let idx=currentData.findIndex(r=>r.caseno===code);
+
+if(idx===-1){
+alert("File Not Found ❌");
+return;
+}
+
 if(scanMode==="SENT"){
+
 if(currentData[idx].sent==="YES"){
 alert("Already Sent ❌");
 return;
 }
+
 currentData[idx].sent="YES";
+saveToDB();
+applySearch();
 alert("Sent ✅");
+return;
 }
 
-/* RECEIVED */
 if(scanMode==="RECEIVED"){
+
+if(currentData[idx].sent!=="YES"){
+alert("File Not Sent Yet ❌");
+return;
+}
+
 if(currentData[idx].received==="YES"){
 alert("Already Received ❌");
 return;
 }
+
 currentData[idx].received="YES";
 currentData[idx].receiveddate=new Date().toLocaleDateString();
 lastReceivedIndex=idx;
-alert("Received ✅");
-nextDatePopup.style.display="block";
-}
 
 saveToDB();
 applySearch();
+alert("Received ✅");
+nextDatePopup.style.display="block";
+}
 }
 
 function saveNextDate(){
